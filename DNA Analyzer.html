@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DNA Analyzer: GC content, complement and protein translation</title>
+<meta name="description" content="Paste a DNA sequence to get base counts, GC content, complement, reverse complement, RNA and protein translation. Free, runs in your browser.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    --bg: #eef3f1;
+    --surface: #ffffff;
+    --ink: #11302b;
+    --muted: #55706a;
+    --line: #cfdcd8;
+    --accent: #0d6b5c;
+    --accent-ink: #ffffff;
+    --a: #2f6fb5;
+    --t: #c7761e;
+    --g: #2e8b62;
+    --c: #b8497f;
+    --stop: #b3261e;
+    --font-head: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+    --font-body: "DM Sans", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "DM Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0d1a18; --surface: #142623; --ink: #e3f0ec; --muted: #94b0a9; --line: #264540;
+      --accent: #4cc2aa; --accent-ink: #06201b;
+      --a: #6aa6e8; --t: #e8a04e; --g: #5cc795; --c: #e27fb0; --stop: #ff8a80;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0d1a18; --surface: #142623; --ink: #e3f0ec; --muted: #94b0a9; --line: #264540;
+    --accent: #4cc2aa; --accent-ink: #06201b;
+    --a: #6aa6e8; --t: #e8a04e; --g: #5cc795; --c: #e27fb0; --stop: #ff8a80;
+  }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+  *, *::before, *::after { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.55 var(--font-body);
+    -webkit-text-size-adjust: 100%;
+  }
+  main { max-width: 760px; margin: 0 auto; padding: 28px 16px 56px; }
+  h1 { font: 700 clamp(2rem, 7vw, 3rem)/1.05 var(--font-head); margin: 0 0 10px; letter-spacing: -0.02em; }
+  h2 { font: 700 1.15rem/1.2 var(--font-head); margin: 0 0 12px; }
+  .lede { color: var(--muted); margin: 0 0 24px; max-width: 56ch; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px; margin-bottom: 16px; }
+  label.field { display: block; font-weight: 700; margin-bottom: 8px; }
+  textarea {
+    width: 100%; min-height: 120px; resize: vertical; padding: 12px;
+    font: 400 15px/1.5 var(--font-mono); letter-spacing: 0.04em;
+    color: var(--ink); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 10px;
+  }
+  textarea:focus-visible, button:focus-visible, select:focus-visible {
+    outline: 3px solid var(--accent); outline-offset: 2px;
+  }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; align-items: center; }
+  button, select {
+    font: 500 15px var(--font-body); padding: 9px 14px; border-radius: 9px;
+    border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer;
+  }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  button:hover { border-color: var(--accent); }
+  .msg { color: var(--muted); font-size: 14px; margin: 10px 0 0; min-height: 1.4em; }
+  .msg.warn { color: var(--stop); }
+
+  /* The sequence, drawn in four colours. Letters stay visible so colour is never the only cue. */
+  .seq {
+    font: 500 17px/1.9 var(--font-mono); letter-spacing: 0.08em; word-break: break-all;
+    max-height: 190px; overflow-y: auto; margin: 0;
+  }
+  .b-A { color: var(--a); } .b-T { color: var(--t); } .b-G { color: var(--g); } .b-C { color: var(--c); }
+  .note { color: var(--muted); font-size: 13px; margin: 8px 0 0; }
+
+  .stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 16px; }
+  .stat { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
+  .stat .k { color: var(--muted); font-size: 14px; }
+  .stat .v { font: 700 2rem/1.15 var(--font-head); }
+  .bar { height: 8px; background: var(--bg); border-radius: 99px; overflow: hidden; margin-top: 8px; }
+  .bar > i { display: block; height: 100%; background: var(--accent); border-radius: 99px; }
+
+  .counts { display: grid; gap: 10px; }
+  .count { display: grid; grid-template-columns: 2.2rem 1fr 4.5rem; align-items: center; gap: 10px; font-family: var(--font-mono); }
+  .count .bar { margin: 0; height: 10px; }
+  .count .bar > i { background: currentColor; }
+  .count span:last-child { text-align: right; color: var(--muted); font-size: 14px; }
+
+  .out { margin-bottom: 18px; }
+  .out:last-child { margin-bottom: 0; }
+  .out .head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .out .head span { font-weight: 700; }
+  .out button { padding: 5px 10px; font-size: 13px; }
+  .block {
+    font: 400 14px/1.6 var(--font-mono); letter-spacing: 0.05em; word-break: break-all;
+    background: var(--bg); border-radius: 9px; padding: 10px 12px; margin: 0;
+    max-height: 120px; overflow-y: auto;
+  }
+
+  .codons { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; max-height: 260px; overflow-y: auto; }
+  .codons li { display: flex; flex-direction: column; align-items: center; min-width: 54px; padding: 5px 7px; border: 1px solid var(--line); border-radius: 8px; font-family: var(--font-mono); font-size: 13px; }
+  .codons .aa { font-weight: 500; color: var(--accent); }
+  .codons li.stop .aa { color: var(--stop); }
+  .codons li.start { border-color: var(--accent); }
+
+  .frame { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; color: var(--muted); font-size: 14px; }
+  footer { color: var(--muted); font-size: 13px; margin-top: 24px; }
+  [hidden] { display: none !important; }
+  @media (min-width: 640px) { .stats { grid-template-columns: repeat(3, 1fr); } main { padding-top: 48px; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>DNA Analyzer</h1>
+  <p class="lede">Paste a DNA sequence and get base counts, GC content, the complement strand, RNA and the protein it codes for.</p>
+
+  <section class="card" aria-labelledby="in-label">
+    <label class="field" id="in-label" for="seq">DNA sequence</label>
+    <textarea id="seq" spellcheck="false" autocapitalize="characters" autocomplete="off" placeholder="ATGGCCTGGTAA"></textarea>
+    <div class="row">
+      <button class="primary" id="example" type="button">Try an example</button>
+      <button id="clear" type="button">Clear</button>
+    </div>
+    <p class="msg" id="msg" role="status" aria-live="polite">Letters A, T, G and C only. Spaces, numbers and FASTA header lines are ignored.</p>
+  </section>
+
+  <div id="results" hidden>
+    <section class="card" aria-labelledby="h-seq">
+      <h2 id="h-seq">Your sequence</h2>
+      <p class="seq" id="colored" tabindex="0"></p>
+      <p class="note" id="trunc" hidden></p>
+    </section>
+
+    <div class="stats">
+      <div class="stat"><div class="k">Length</div><div class="v" id="len">0</div></div>
+      <div class="stat">
+        <div class="k">GC content</div><div class="v" id="gc">0%</div>
+        <div class="bar" aria-hidden="true"><i id="gcbar" style="width:0%"></i></div>
+      </div>
+      <div class="stat"><div class="k">Complete codons</div><div class="v" id="ncod">0</div></div>
+    </div>
+
+    <section class="card" aria-labelledby="h-counts">
+      <h2 id="h-counts">Base counts</h2>
+      <div class="counts" id="counts"></div>
+    </section>
+
+    <section class="card" aria-labelledby="h-strands">
+      <h2 id="h-strands">Strands</h2>
+      <div class="out"><div class="head"><span>Complement</span><button type="button" data-copy="o-comp">Copy</button></div><p class="block" id="o-comp"></p></div>
+      <div class="out"><div class="head"><span>Reverse complement</span><button type="button" data-copy="o-rev">Copy</button></div><p class="block" id="o-rev"></p></div>
+      <div class="out"><div class="head"><span>RNA (T becomes U)</span><button type="button" data-copy="o-rna">Copy</button></div><p class="block" id="o-rna"></p></div>
+    </section>
+
+    <section class="card" aria-labelledby="h-prot">
+      <h2 id="h-prot">Protein translation</h2>
+      <div class="frame">
+        <label for="frame">Reading frame</label>
+        <select id="frame"><option value="0">1</option><option value="1">2</option><option value="2">3</option></select>
+      </div>
+      <div class="out"><div class="head"><span>Amino acids (one-letter code, * = stop)</span><button type="button" data-copy="o-prot">Copy</button></div><p class="block" id="o-prot"></p></div>
+      <ul class="codons" id="codons" aria-label="Codon by codon translation"></ul>
+      <p class="note" id="ctrunc" hidden></p>
+    </section>
+  </div>
+
+  <footer>Everything runs in your browser. Your sequence is never uploaded.</footer>
+</main>
+
+<script>
+(function () {
+  // Standard genetic code, built from the usual TCAG ordering.
+  var BASES = "TCAG";
+  var ONE = "FFLLSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG";
+  var THREE = { F:"Phe", L:"Leu", S:"Ser", Y:"Tyr", C:"Cys", W:"Trp", P:"Pro", H:"His", Q:"Gln", R:"Arg",
+                I:"Ile", M:"Met", T:"Thr", N:"Asn", K:"Lys", V:"Val", A:"Ala", D:"Asp", E:"Glu", G:"Gly", "*":"Stop" };
+  var TABLE = {};
+  var n = 0;
+  for (var i = 0; i < 4; i++) for (var j = 0; j < 4; j++) for (var k = 0; k < 4; k++) {
+    TABLE[BASES[i] + BASES[j] + BASES[k]] = ONE[n++];
+  }
+
+  var SAMPLE = "ATGGCCTGGGAGCTGAAAGGCTTCACCGATTGCTAA";
+  var MAX_SHOWN = 1000, MAX_CODONS = 300;
+  var $ = function (id) { return document.getElementById(id); };
+  var ta = $("seq"), msg = $("msg");
+
+  function clean(raw) {
+    var lines = raw.split(/\r?\n/).filter(function (l) { return l.trim().charAt(0) !== ">"; });
+    var s = lines.join("").toUpperCase().replace(/[\s\d]/g, "").replace(/U/g, "T");
+    var bad = s.replace(/[ATGC]/g, "");
+    var good = s.replace(/[^ATGC]/g, "");
+    return { seq: good, bad: bad };
+  }
+
+  function comp(s) {
+    var m = { A: "T", T: "A", G: "C", C: "G" };
+    return s.replace(/[ATGC]/g, function (b) { return m[b]; });
+  }
+
+  function chips(s) {
+    var shown = s.slice(0, MAX_SHOWN), out = "";
+    for (var i = 0; i < shown.length; i++) out += '<span class="b-' + shown[i] + '">' + shown[i] + "</span>";
+    return out;
+  }
+
+  function render() {
+    var res = clean(ta.value), s = res.seq;
+    var results = $("results");
+    msg.className = "msg";
+    if (!ta.value.trim()) {
+      results.hidden = true;
+      msg.textContent = "Letters A, T, G and C only. Spaces, numbers and FASTA header lines are ignored.";
+      return;
+    }
+    if (res.bad.length) {
+      var uniq = Array.from(new Set(res.bad.split(""))).slice(0, 6).join(", ");
+      msg.className = "msg warn";
+      msg.textContent = "Ignored " + res.bad.length + " character" + (res.bad.length > 1 ? "s" : "") + " that are not A, T, G or C (" + uniq + ").";
+    } else {
+      msg.textContent = "Looks good.";
+    }
+    if (!s.length) { results.hidden = true; return; }
+    results.hidden = false;
+
+    var g = (s.match(/G/g) || []).length, c = (s.match(/C/g) || []).length;
+    var gc = (g + c) / s.length * 100;
+    var frame = parseInt($("frame").value, 10);
+    var ncod = Math.floor((s.length - frame) / 3);
+
+    $("colored").innerHTML = chips(s);
+    var trunc = $("trunc");
+    if (s.length > MAX_SHOWN) { trunc.hidden = false; trunc.textContent = "Showing the first " + MAX_SHOWN + " of " + s.length + " bases. Results below use the full sequence."; }
+    else trunc.hidden = true;
+
+    $("len").textContent = s.length.toLocaleString();
+    $("gc").textContent = gc.toFixed(1) + "%";
+    $("gcbar").style.width = gc.toFixed(1) + "%";
+    $("ncod").textContent = Math.max(ncod, 0).toLocaleString();
+
+    var html = "";
+    ["A", "T", "G", "C"].forEach(function (b) {
+      var cnt = (s.match(new RegExp(b, "g")) || []).length;
+      var pct = (cnt / s.length * 100);
+      html += '<div class="count b-' + b + '"><strong>' + b + '</strong><div class="bar" aria-hidden="true"><i style="width:' + pct.toFixed(1) + '%"></i></div><span>' + cnt.toLocaleString() + " (" + pct.toFixed(1) + "%)</span></div>";
+    });
+    $("counts").innerHTML = html;
+
+    var cm = comp(s);
+    $("o-comp").textContent = cm;
+    $("o-rev").textContent = cm.split("").reverse().join("");
+    $("o-rna").textContent = s.replace(/T/g, "U");
+
+    var prot = "", list = "";
+    for (var p = frame, count = 0; p + 3 <= s.length; p += 3, count++) {
+      var cod = s.substr(p, 3), aa = TABLE[cod];
+      prot += aa;
+      if (count < MAX_CODONS) {
+        var cls = aa === "*" ? "stop" : (cod === "ATG" ? "start" : "");
+        list += '<li class="' + cls + '"><span>' + cod + '</span><span class="aa">' + THREE[aa] + "</span></li>";
+      }
+    }
+    $("o-prot").textContent = prot || "Sequence is too short for a full codon.";
+    $("codons").innerHTML = list;
+    var ct = $("ctrunc");
+    if (prot.length > MAX_CODONS) { ct.hidden = false; ct.textContent = "Showing the first " + MAX_CODONS + " codons. The amino acid string above is complete."; }
+    else ct.hidden = true;
+  }
+
+  ta.addEventListener("input", render);
+  $("frame").addEventListener("change", render);
+  $("example").addEventListener("click", function () { ta.value = SAMPLE; render(); });
+  $("clear").addEventListener("click", function () { ta.value = ""; render(); ta.focus(); });
+
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest("[data-copy]");
+    if (!btn) return;
+    var text = $(btn.getAttribute("data-copy")).textContent;
+    var old = btn.textContent;
+    function done(ok) { btn.textContent = ok ? "Copied" : "Press and hold to copy"; setTimeout(function () { btn.textContent = old; }, 1400); }
+    try { navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(false); }); }
+    catch (err) { done(false); }
+  });
+})();
+</script>
+</body>
+</html>
